@@ -44,13 +44,31 @@ app.post("/send-to-ghl", async (req, res) => {
   }
 });
 
-// 🔹 Track user behavior
 app.post("/track", async (req, res) => {
-  const { email, action, details = "" } = req.body;
+  const { email, action = "Visited", details = "" } = req.body;
 
-  if (!email || !action) return res.status(400).json({ error: "Missing required fields" });
+  if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
+    // 🔍 Step 1: Check if user exists
+    const check = await axios.get(
+      `https://rest.gohighlevel.com/v1/contacts/?email=${encodeURIComponent(email)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${GHL_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const exists = check.data.contacts?.length > 0;
+
+    // 🧭 Step 2: If not exists, send response to redirect
+    if (!exists) {
+      return res.status(200).json({ redirect: true, url: "https://yourdomain.com/register" });
+    }
+
+    // 🧠 Step 3: Send tracking data to GHL
     await axios.post(
       "https://rest.gohighlevel.com/v1/contacts/update",
       {
@@ -70,9 +88,10 @@ app.post("/track", async (req, res) => {
     res.status(200).json({ success: true });
   } catch (err) {
     console.error("❌ Tracking Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to track behavior in GHL" });
+    res.status(500).json({ error: "Tracking failed" });
   }
 });
+
 
 // 🔹 Webhook from GHL → Sync to REW
 app.post("/ghl-webhook", async (req, res) => {
