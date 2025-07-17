@@ -50,7 +50,7 @@ app.post("/track", async (req, res) => {
   if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
-    // 🔍 Step 1: Check if user exists
+    // 🔍 Check if user exists
     const check = await axios.get(
       `https://rest.gohighlevel.com/v1/contacts/?email=${encodeURIComponent(email)}`,
       {
@@ -63,18 +63,23 @@ app.post("/track", async (req, res) => {
 
     const exists = check.data.contacts?.length > 0;
 
-    // 🧭 Step 2: If not exists, send response to redirect
     if (!exists) {
       return res.status(200).json({ redirect: true, url: "https://yourdomain.com/register" });
     }
 
-    // 🧠 Step 3: Send tracking data to GHL
+    // ✅ Build dynamic tags
+    const tags = [
+      "REW Website Visitor",
+      `${action}-${details}` // Example: Visited-/about or Clicked-/properties
+    ];
+
+    // 🔄 Send update with dynamic tags
     await axios.post(
       "https://rest.gohighlevel.com/v1/contacts/update",
       {
         email,
-        tags: [action],
-        customField: `lastAction=${details}`,
+        tags,
+        customField: `lastAction=${action}-${details}`,
       },
       {
         headers: {
@@ -84,7 +89,7 @@ app.post("/track", async (req, res) => {
       }
     );
 
-    console.log(`✅ Tracked: ${email} - ${action}`);
+    console.log(`✅ Tracked: ${email} | Tags: ${tags.join(", ")}`);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error("❌ Tracking Error:", err.response?.data || err.message);
