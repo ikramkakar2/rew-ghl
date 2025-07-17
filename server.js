@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
@@ -10,9 +11,11 @@ app.use(bodyParser.json());
 const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY"; // 👈 Replace with full GHL key
 const REW_API_KEY = "6700a798bc487f45e470fa17a497e7d9f472a7591e0e4a13b54a64ebcdbd8bce"; // 👈 Your REW API key
 
-// ✅ Create Lead in GHL when user signs up or enters email
+// ✅ Create contact in GoHighLevel when user enters email
 app.post("/send-to-ghl", async (req, res) => {
-  const { email, name, phone } = req.body;
+  const { email, name = "", phone = "" } = req.body;
+
+  if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
     const ghlRes = await axios.post(
@@ -22,7 +25,7 @@ app.post("/send-to-ghl", async (req, res) => {
         name,
         phone,
         tags: ["REW Website Visitor", "New Signup"],
-        customField: "source=REW"
+        customField: "source=REW",
       },
       {
         headers: {
@@ -34,27 +37,24 @@ app.post("/send-to-ghl", async (req, res) => {
 
     return res.status(200).json({ success: true, ghlContact: ghlRes.data });
   } catch (err) {
-    console.error("GHL Error:", err.response?.data || err.message);
-    return res.status(500).json({ error: "Failed to send to GHL" });
+    console.error("GHL Create Error:", err.response?.data || err.message);
+    return res.status(500).json({ error: "Failed to create contact in GHL" });
   }
 });
 
-// ✅ Track User Behavior from frontend
-app.post("/track", async (req, res) => {
-  const { email, action, details } = req.body;
+// ✅ Automatically tag user when they visit pages
+app.post("/send-behavior-tag", async (req, res) => {
+  const { email, tag } = req.body;
 
-  if (!email || !action) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
+  if (!email || !tag) return res.status(400).json({ error: "Email and tag are required" });
 
   try {
-    // Update contact in GHL with new tag and custom field
     await axios.post(
       "https://rest.gohighlevel.com/v1/contacts/update",
       {
         email,
-        tags: [action], // e.g., "Viewed Property", "Favorited Listing"
-        customField: `lastAction=${details}`, // or use a GHL field ID for better mapping
+        tags: [tag], // Tag like '/blog', '/listing/123', etc.
+        customField: `lastVisited=${tag}`,
       },
       {
         headers: {
@@ -64,47 +64,42 @@ app.post("/track", async (req, res) => {
       }
     );
 
-    console.log(`✅ Tracked: ${action} - ${details}`);
-    return res.status(200).json({ success: true, message: "Action tracked in GHL" });
+    console.log(`✅ Tagged ${email} with: ${tag}`);
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error("Tracking Error:", err.response?.data || err.message);
-    return res.status(500).json({ error: "Failed to track behavior in GHL" });
+    console.error("Tagging Error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to send tag to GHL" });
   }
 });
 
-// ✅ GHL → REW Sync (Webhook from GHL)
+// ✅ Webhook listener for GHL to sync status to REW
 app.post("/ghl-webhook", async (req, res) => {
   const { email, tags } = req.body;
 
-  if (tags && tags.includes("Closed")) {
+  if (!email || !tags) return res.status(400).json({ error: "Missing email or tags" });
+
+  if (tags.includes("Closed")) {
     try {
-      // Simulate update in REW
-      await axios.post("http://localhost:3000/update-rew", {
+      // Simulate REW update
+      await axios.post("https://your-rew-api.com/update-status", {
         email,
         status: "Closed",
+        apiKey: REW_API_KEY,
       });
 
-      return res.status(200).json({ success: true, message: "Synced Closed status to REW" });
+      console.log(`🔁 Synced 'Closed' status for ${email}`);
+      return res.status(200).json({ success: true });
     } catch (err) {
-      return res.status(500).json({ error: "Failed to sync with REW" });
+      console.error("REW Sync Error:", err.response?.data || err.message);
+      return res.status(500).json({ error: "Failed to sync to REW" });
     }
   }
 
-  return res.status(200).json({ message: "Webhook received" });
+  return res.status(200).json({ message: "Webhook received but no action needed" });
 });
 
-// ✅ Simulated REW update endpoint
-app.post("/update-rew", (req, res) => {
-  const { email, status } = req.body;
-
-  console.log(`🔁 Syncing GHL status '${status}' to REW for ${email}`);
-  // Simulate saving to REW. You’d use REW API here.
-  return res.status(200).json({ success: true });
-});
-
-// ✅ Run server
+// ✅ Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on port ${PORT}`);
+  console.log(`🚀 Backend running at http://localhost:${PORT}`);
 });
-
