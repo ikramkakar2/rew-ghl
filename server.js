@@ -7,14 +7,24 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json()); // No need for body-parser anymore
+app.use(express.json());
 
 // Securely pull API keys
-const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
-const REW_API_KEY = "6700a798bc487f45e470fa17a497e7d9f472a7591e0e4a13b54a64ebcdbd8bce";
+const GHL_API_KEY = "your-ght-api-key-here"; // Make sure to replace with your actual GHL API key
+const REW_API_KEY = "your-rew-api-key-here"; // Make sure to replace with your REW API key
+
+// Function to check if the request comes from the allowed domain (sucrerealty.com)
+function validateDomain(req) {
+  const origin = req.get("Origin");
+  return origin && origin.includes("https://www.sucrerealty.com/");
+}
 
 // 🔹 Create or update contact in GHL
 app.post("/send-to-ghl", async (req, res) => {
+  if (!validateDomain(req)) {
+    return res.status(403).json({ error: "Invalid domain" });
+  }
+
   const { email, name = "", phone = "" } = req.body;
 
   if (!email) return res.status(400).json({ error: "Email is required" });
@@ -44,42 +54,30 @@ app.post("/send-to-ghl", async (req, res) => {
   }
 });
 
+// 🔹 Track user behavior (page visits, etc.)
 app.post("/track", async (req, res) => {
-  const { email, action = "Visited", details = "" } = req.body;
+  if (!validateDomain(req)) {
+    return res.status(403).json({ error: "Invalid domain" });
+  }
 
-  if (!email) return res.status(400).json({ error: "Email is required" });
+  const { email, action, details = "" } = req.body;
+
+  if (!email || !action) return res.status(400).json({ error: "Missing required fields" });
 
   try {
-    // 🔍 Check if user exists
-    const check = await axios.get(
-      `https://rest.gohighlevel.com/v1/contacts/?email=${encodeURIComponent(email)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const exists = check.data.contacts?.length > 0;
-
-    if (!exists) {
-      return res.status(200).json({ redirect: true, url: "https://yourdomain.com/register" });
+    // Add the custom tag to the existing tags (including REW Website Visitor and New Signup)
+    const tagsToSend = [action, "REW Website Visitor", "New Signup"];
+    if (details) {
+      tagsToSend.push(details); // If there's more specific details (like a URL or page action), add them to tags.
     }
 
-    // ✅ Build dynamic tags
-    const tags = [
-      "REW Website Visitor",
-      `${action}-${details}` // Example: Visited-/about or Clicked-/properties
-    ];
-
-    // 🔄 Send update with dynamic tags
+    // Sending the tags to GHL API
     await axios.post(
       "https://rest.gohighlevel.com/v1/contacts/update",
       {
         email,
-        tags,
-        customField: `lastAction=${action}-${details}`,
+        tags: tagsToSend, // Send the tags array
+        customField: `lastAction=${details}`,
       },
       {
         headers: {
@@ -89,17 +87,20 @@ app.post("/track", async (req, res) => {
       }
     );
 
-    console.log(`✅ Tracked: ${email} | Tags: ${tags.join(", ")}`);
+    console.log(`✅ Tracked: ${email} - Tags: ${tagsToSend.join(', ')}`);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error("❌ Tracking Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Tracking failed" });
+    res.status(500).json({ error: "Failed to track behavior in GHL" });
   }
 });
 
-
 // 🔹 Webhook from GHL → Sync to REW
 app.post("/ghl-webhook", async (req, res) => {
+  if (!validateDomain(req)) {
+    return res.status(403).json({ error: "Invalid domain" });
+  }
+
   const { email, tags } = req.body;
 
   if (!email || !tags) return res.status(400).json({ error: "Missing email or tags" });
@@ -133,6 +134,10 @@ app.post("/update-rew", (req, res) => {
 
 // 🔹 Check if user exists in GHL
 app.post("/check-user", async (req, res) => {
+  if (!validateDomain(req)) {
+    return res.status(403).json({ error: "Invalid domain" });
+  }
+
   const { email } = req.body;
 
   if (!email) return res.status(400).json({ error: "Email is required" });
