@@ -13,7 +13,7 @@ app.use(express.json());
 const GHL_API_KEY = "your-ght-api-key-here"; // Make sure to replace with your actual GHL API key
 const REW_API_KEY = "your-rew-api-key-here"; // Make sure to replace with your REW API key
 
-// Function to check if the request comes from the allowed domain (sucrerealty.com)
+// Function to check if the request comes from the allowed domain (sucrerealty.com) \\\
 function validateDomain(req) {
   const origin = req.get("Origin");
   return origin && origin.includes("https://www.sucrerealty.com/");
