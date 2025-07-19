@@ -10,10 +10,10 @@ app.use(cors());
 app.use(express.json());
 
 // Securely pull API keys
-const GHL_API_KEY = "your-ght-api-key-here"; // Make sure to replace with your actual GHL API key
-const REW_API_KEY = "your-rew-api-key-here"; // Make sure to replace with your REW API key
+const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
+const REW_API_KEY = "6700a798bc487f45e470fa17a497e7d9f472a7591e0e4a13b54a64ebcdbd8bce";
 
-// Function to check if the request comes from the allowed domain (sucrerealty.com) \\\
+// Function to check if the request comes from the allowed domain (sucrerealty.com)
 function validateDomain(req) {
   const origin = req.get("Origin");
   return origin && origin.includes("https://www.sucrerealty.com/");
@@ -65,18 +65,11 @@ app.post("/track", async (req, res) => {
   if (!email || !action) return res.status(400).json({ error: "Missing required fields" });
 
   try {
-    // Add the custom tag to the existing tags (including REW Website Visitor and New Signup)
-    const tagsToSend = [action, "REW Website Visitor", "New Signup"];
-    if (details) {
-      tagsToSend.push(details); // If there's more specific details (like a URL or page action), add them to tags.
-    }
-
-    // Sending the tags to GHL API
     await axios.post(
       "https://rest.gohighlevel.com/v1/contacts/update",
       {
         email,
-        tags: tagsToSend, // Send the tags array
+        tags: [action],
         customField: `lastAction=${details}`,
       },
       {
@@ -87,16 +80,7 @@ app.post("/track", async (req, res) => {
       }
     );
 
-    console.log(`✅ Tracked: ${email} - Tags: ${tagsToSend.join(', ')}`);
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("❌ Tracking Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to track behavior in GHL" });
-  }
-});
-
-
-    console.log(`✅ Tracked: ${email} - Tags: ${tagsToSend.join(', ')}`);
+    console.log(`✅ Tracked: ${email} - ${action}`);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error("❌ Tracking Error:", err.response?.data || err.message);
