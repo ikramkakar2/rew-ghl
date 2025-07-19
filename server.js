@@ -95,6 +95,15 @@ app.post("/track", async (req, res) => {
   }
 });
 
+
+    console.log(`✅ Tracked: ${email} - Tags: ${tagsToSend.join(', ')}`);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("❌ Tracking Error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to track behavior in GHL" });
+  }
+});
+
 // 🔹 Webhook from GHL → Sync to REW
 app.post("/ghl-webhook", async (req, res) => {
   if (!validateDomain(req)) {
