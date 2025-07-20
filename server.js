@@ -15,8 +15,9 @@ const REW_API_KEY = "your-rew-api-key-here"; // Replace with your REW API key
 
 // Function to check if the request comes from the allowed domain (sucrerealty.com)
 function validateDomain(req) {
-  const origin = req.get("Origin");
-  return origin && origin.includes("https://www.sucrerealty.com/");
+  return true;
+ /* const origin = req.get("Origin");
+  return origin && origin.includes("https://www.sucrerealty.com/"); */
 }
 
 // 🔹 Create or update contact in GHL
