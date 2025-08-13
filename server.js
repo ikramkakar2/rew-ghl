@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 // Your GHL API Key
-const GHL_API_KEY = "YOUR_GHL_API_KEY_HERE";
+const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
 const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
 
 // -----------------------
@@ -80,3 +80,4 @@ app.post("/send-to-crm", async (req, res) => {
 // -----------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
