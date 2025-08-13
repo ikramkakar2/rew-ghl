@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Your GHL API Key
+// Location API Key (put in .env as GHL_API_KEY=your_key_here)
 const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
 const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
 
@@ -18,27 +18,26 @@ const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
 async function findGHLContactByEmail(email) {
   try {
     const res = await axios.get(`${GHL_API_BASE}/contacts/`, {
-      params: { email },
+      params: { query: email }, // ✅ Correct search param for v1
       headers: { Authorization: `Bearer ${GHL_API_KEY}` }
     });
-    return res.data?.contacts?.[0] || null;
+    return res.data.contacts?.[0] || null;
   } catch (err) {
     console.error("Error finding GHL contact:", err.response?.data || err.message);
-    throw new Error("Failed to search GHL");
+    return null; // Don't throw, just return null
   }
 }
 
 // -----------------------
-// Create contact in GHL with tag
+// Create contact in GHL (firstName only)
 // -----------------------
 async function createGHLContact({ name, email, phone }) {
   try {
     const res = await axios.post(`${GHL_API_BASE}/contacts/`, {
-      name,
+      firstName: name, // ✅ Only firstName
       email,
       phone,
-      source: "Website Popup",
-      tags: ["REW New Sign Up"] // <--- Tag added here
+      tags: ["REW New Sign Up"]
     }, {
       headers: {
         Authorization: `Bearer ${GHL_API_KEY}`,
