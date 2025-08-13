@@ -1,168 +1,127 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
+import express from "express";
+import fetch from "node-fetch";
+import cors from "cors";
 
-const app = express();
+// ==================== CONFIG ====================
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Your API keys
+const REW_API_KEY = "a13bef704dd30a0dca1e1b6deb4ed1eae8acfead51ed3505ff4cbe7f67f3a99a";
+const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
+
+// REW API Base URL (adjust if needed)
+const REW_API_BASE = "https://crm.realestatewebmasters.com/api/v1";
+// GHL API Base URL
+const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
+
+// ================================================
+
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Securely pull API keys
-const GHL_API_KEY = "your-ght-api-key-here"; // Replace with your GHL API key
-const REW_API_KEY = "your-rew-api-key-here"; // Replace with your REW API key
+// ----------- REW FUNCTIONS -----------
 
-// Function to check if the request comes from the allowed domain (sucrerealty.com)
-function validateDomain(req) {
-  return true;
- /* const origin = req.get("Origin");
-  return origin && origin.includes("https://www.sucrerealty.com/"); */
+// Search REW by email
+async function findREWContactByEmail(email) {
+  const res = await fetch(`${REW_API_BASE}/leads?email=${encodeURIComponent(email)}`, {
+    headers: { Authorization: `Bearer ${REW_API_KEY}` }
+  });
+  if (!res.ok) throw new Error(`REW Search error: ${res.statusText}`);
+  const data = await res.json();
+  return data.data && data.data.length > 0 ? data.data[0] : null;
 }
 
-// 🔹 Create or update contact in GHL
-app.post("/send-to-ghl", async (req, res) => {
-  if (!validateDomain(req)) {
-    return res.status(403).json({ error: "Invalid domain" });
+// Create REW lead
+async function createREWLead({ name, email, phone }) {
+  const res = await fetch(`${REW_API_BASE}/leads`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${REW_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      first_name: name.split(" ")[0] || "",
+      last_name: name.split(" ")[1] || "",
+      email,
+      phone
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.text();
+    throw new Error(`REW Create error: ${errData}`);
   }
 
-  const { email, name = "", phone = "" } = req.body;
+  return await res.json();
+}
 
-  if (!email) return res.status(400).json({ error: "Email is required" });
+// ----------- GHL FUNCTIONS -----------
 
+// Search GHL by email
+async function findGHLContactByEmail(email) {
+  const res = await fetch(`${GHL_API_BASE}/contacts?email=${encodeURIComponent(email)}`, {
+    headers: { Authorization: `Bearer ${GHL_API_KEY}` }
+  });
+  if (!res.ok) throw new Error(`GHL Search error: ${res.statusText}`);
+  const data = await res.json();
+  return data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
+}
+
+// Create GHL contact
+async function createGHLContact({ name, email, phone }) {
+  const res = await fetch(`${GHL_API_BASE}/contacts/`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GHL_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name,
+      email,
+      phone,
+      source: "Website Popup"
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.text();
+    throw new Error(`GHL Create error: ${errData}`);
+  }
+
+  return await res.json();
+}
+
+// ----------- MAIN API ENDPOINT -----------
+
+app.post("/send-to-crm", async (req, res) => {
   try {
-    const response = await axios.post(
-      "https://rest.gohighlevel.com/v1/contacts/",
-      {
-        email,
-        name,
-        phone,
-        tags: ["REW Website Visitor", "New Signup"],
-        customField: "source=REW",
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const { name, email, phone } = req.body;
 
-    res.status(200).json({ success: true, ghlContact: response.data });
-  } catch (err) {
-    console.error("❌ GHL Create Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to send to GHL" });
-  }
-});
-
-// 🔹 Track user behavior (page visits, etc.)
-app.post("/track", async (req, res) => {
-  if (!validateDomain(req)) {
-    return res.status(403).json({ error: "Invalid domain" });
-  }
-
-  const { email, action, details = "" } = req.body;
-
-  if (!email || !action) return res.status(400).json({ error: "Missing required fields" });
-
-  try {
-    // Add the custom tag to the existing tags (including REW Website Visitor and New Signup)
-    const tagsToSend = [action, "REW Website Visitor", "New Signup"];
-    if (details) {
-      tagsToSend.push(details); // If there's more specific details (like a URL or page action), add them to tags.
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
     }
 
-    // Sending the tags to GHL API
-    await axios.post(
-      "https://rest.gohighlevel.com/v1/contacts/update",
-      {
-        email,
-        tags: tagsToSend, // Send the tags array
-        customField: `lastAction=${details}`,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    console.log(`✅ Tracked: ${email} - Tags: ${tagsToSend.join(', ')}`);
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("❌ Tracking Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to track behavior in GHL" });
-  }
-});
-
-// 🔹 Webhook from GHL → Sync to REW
-app.post("/ghl-webhook", async (req, res) => {
-  if (!validateDomain(req)) {
-    return res.status(403).json({ error: "Invalid domain" });
-  }
-
-  const { email, tags } = req.body;
-
-  if (!email || !tags) return res.status(400).json({ error: "Missing email or tags" });
-
-  if (tags.includes("Closed")) {
-    try {
-      await axios.post("http://localhost:3000/update-rew", {
-        email,
-        status: "Closed",
-        apiKey: REW_API_KEY,
-      });
-
-      console.log(`🔁 Synced 'Closed' for ${email}`);
-      res.status(200).json({ success: true });
-    } catch (err) {
-      console.error("❌ REW Sync Error:", err.response?.data || err.message);
-      res.status(500).json({ error: "Failed to sync with REW" });
+    let rewContact = await findREWContactByEmail(email);
+    if (!rewContact) {
+      rewContact = await createREWLead({ name, email, phone });
     }
-  } else {
-    res.status(200).json({ message: "No sync needed" });
+
+    let ghlContact = await findGHLContactByEmail(email);
+    if (!ghlContact) {
+      ghlContact = await createGHLContact({ name, email, phone });
+    }
+
+    res.json({
+      message: "Lead processed successfully",
+      rew: rewContact,
+      ghl: ghlContact
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// 🔹 Simulated REW update endpoint
-app.post("/update-rew", (req, res) => {
-  const { email, status } = req.body;
-
-  console.log(`✅ Simulating REW update: ${email} → ${status}`);
-  res.status(200).json({ success: true });
-});
-
-// 🔹 Check if user exists in GHL
-app.post("/check-user", async (req, res) => {
-  if (!validateDomain(req)) {
-    return res.status(403).json({ error: "Invalid domain" });
-  }
-
-  const { email } = req.body;
-
-  if (!email) return res.status(400).json({ error: "Email is required" });
-
-  try {
-    const response = await axios.get(
-      `https://rest.gohighlevel.com/v1/contacts/?email=${encodeURIComponent(email)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const exists = response.data.contacts?.length > 0;
-    res.status(200).json({ exists });
-  } catch (err) {
-    console.error("❌ Check User Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to check user in GHL" });
-  }
-});
-
-// 🔹 Start the server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
