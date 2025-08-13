@@ -1,28 +1,19 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
+const express = require("express");
+const fetch = require("node-fetch");
+const cors = require("cors");
 
-// ==================== CONFIG ====================
 const PORT = process.env.PORT || 3000;
 
-// Your API keys
 const REW_API_KEY = "a13bef704dd30a0dca1e1b6deb4ed1eae8acfead51ed3505ff4cbe7f67f3a99a";
 const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
 
-// REW API Base URL (adjust if needed)
 const REW_API_BASE = "https://crm.realestatewebmasters.com/api/v1";
-// GHL API Base URL
 const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
-
-// ================================================
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ----------- REW FUNCTIONS -----------
-
-// Search REW by email
 async function findREWContactByEmail(email) {
   const res = await fetch(`${REW_API_BASE}/leads?email=${encodeURIComponent(email)}`, {
     headers: { Authorization: `Bearer ${REW_API_KEY}` }
@@ -32,7 +23,6 @@ async function findREWContactByEmail(email) {
   return data.data && data.data.length > 0 ? data.data[0] : null;
 }
 
-// Create REW lead
 async function createREWLead({ name, email, phone }) {
   const res = await fetch(`${REW_API_BASE}/leads`, {
     method: "POST",
@@ -56,9 +46,6 @@ async function createREWLead({ name, email, phone }) {
   return await res.json();
 }
 
-// ----------- GHL FUNCTIONS -----------
-
-// Search GHL by email
 async function findGHLContactByEmail(email) {
   const res = await fetch(`${GHL_API_BASE}/contacts?email=${encodeURIComponent(email)}`, {
     headers: { Authorization: `Bearer ${GHL_API_KEY}` }
@@ -68,7 +55,6 @@ async function findGHLContactByEmail(email) {
   return data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
 }
 
-// Create GHL contact
 async function createGHLContact({ name, email, phone }) {
   const res = await fetch(`${GHL_API_BASE}/contacts/`, {
     method: "POST",
@@ -91,8 +77,6 @@ async function createGHLContact({ name, email, phone }) {
 
   return await res.json();
 }
-
-// ----------- MAIN API ENDPOINT -----------
 
 app.post("/send-to-crm", async (req, res) => {
   try {
