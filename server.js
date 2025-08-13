@@ -1,8 +1,11 @@
 const express = require("express");
-const fetch = require("node-fetch");
+const axios = require("axios");
 const cors = require("cors");
+require("dotenv").config();
 
-const PORT = process.env.PORT || 3000;
+const app = express();
+app.use(cors());
+app.use(express.json());
 
 const REW_API_KEY = "a13bef704dd30a0dca1e1b6deb4ed1eae8acfead51ed3505ff4cbe7f67f3a99a";
 const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
@@ -10,91 +13,63 @@ const GHL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6Ij
 const REW_API_BASE = "https://crm.realestatewebmasters.com/api/v1";
 const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
 async function findREWContactByEmail(email) {
-  const res = await fetch(`${REW_API_BASE}/leads?email=${encodeURIComponent(email)}`, {
+  const res = await axios.get(`${REW_API_BASE}/leads`, {
+    params: { email },
     headers: { Authorization: `Bearer ${REW_API_KEY}` }
   });
-  if (!res.ok) throw new Error(`REW Search error: ${res.statusText}`);
-  const data = await res.json();
-  return data.data && data.data.length > 0 ? data.data[0] : null;
+  return res.data?.data?.[0] || null;
 }
 
 async function createREWLead({ name, email, phone }) {
-  const res = await fetch(`${REW_API_BASE}/leads`, {
-    method: "POST",
+  const res = await axios.post(`${REW_API_BASE}/leads`, {
+    first_name: name.split(" ")[0] || "",
+    last_name: name.split(" ")[1] || "",
+    email,
+    phone
+  }, {
     headers: {
       Authorization: `Bearer ${REW_API_KEY}`,
       "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      first_name: name.split(" ")[0] || "",
-      last_name: name.split(" ")[1] || "",
-      email,
-      phone
-    })
+    }
   });
-
-  if (!res.ok) {
-    const errData = await res.text();
-    throw new Error(`REW Create error: ${errData}`);
-  }
-
-  return await res.json();
+  return res.data;
 }
 
 async function findGHLContactByEmail(email) {
-  const res = await fetch(`${GHL_API_BASE}/contacts?email=${encodeURIComponent(email)}`, {
+  const res = await axios.get(`${GHL_API_BASE}/contacts/`, {
+    params: { email },
     headers: { Authorization: `Bearer ${GHL_API_KEY}` }
   });
-  if (!res.ok) throw new Error(`GHL Search error: ${res.statusText}`);
-  const data = await res.json();
-  return data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
+  return res.data?.contacts?.[0] || null;
 }
 
 async function createGHLContact({ name, email, phone }) {
-  const res = await fetch(`${GHL_API_BASE}/contacts/`, {
-    method: "POST",
+  const res = await axios.post(`${GHL_API_BASE}/contacts/`, {
+    name,
+    email,
+    phone,
+    source: "Website Popup"
+  }, {
     headers: {
       Authorization: `Bearer ${GHL_API_KEY}`,
       "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      name,
-      email,
-      phone,
-      source: "Website Popup"
-    })
+    }
   });
-
-  if (!res.ok) {
-    const errData = await res.text();
-    throw new Error(`GHL Create error: ${errData}`);
-  }
-
-  return await res.json();
+  return res.data;
 }
 
 app.post("/send-to-crm", async (req, res) => {
   try {
     const { name, email, phone } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ error: "Email is required" });
-    }
+    if (!email) return res.status(400).json({ error: "Email is required" });
 
     let rewContact = await findREWContactByEmail(email);
-    if (!rewContact) {
-      rewContact = await createREWLead({ name, email, phone });
-    }
+    if (!rewContact) rewContact = await createREWLead({ name, email, phone });
 
     let ghlContact = await findGHLContactByEmail(email);
-    if (!ghlContact) {
-      ghlContact = await createGHLContact({ name, email, phone });
-    }
+    if (!ghlContact) ghlContact = await createGHLContact({ name, email, phone });
 
     res.json({
       message: "Lead processed successfully",
@@ -102,10 +77,10 @@ app.post("/send-to-crm", async (req, res) => {
       ghl: ghlContact
     });
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(3000, () => console.log("Server running on port 3000"));
