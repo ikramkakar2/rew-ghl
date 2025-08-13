@@ -8,18 +8,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Your GHL API Key
-const GHL_API_KEY = "6700a798bc487f45e470fa17a497e7d9f472a7591e0e4a13b54a64ebcdbd8bce";
+// -----------------------
+// CONFIG
+// -----------------------
+const GHL_API_KEY = process.env.GHL_API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlEVUp6ekloYUJtZXo5SjdKRU9iIiwidmVyc2lvbiI6MSwiaWF0IjoxNzM4NDcwMjIyNjEwLCJzdWIiOiJQbHhjbkM3SlBZZzBxSVV5cjJBWiJ9.QgjVpuuzsuiG2cPs57MAOl68pnsCRHOXe7CvB_8NAEY";
 const GHL_API_BASE = "https://rest.gohighlevel.com/v1";
 
+// Replace with your actual GHL tag ID
+const REW_NEW_SIGNUP_TAG_ID = "YOUR_TAG_ID"; 
+
 // -----------------------
-// Find contact in GHL by email
+// GHL FUNCTIONS
 // -----------------------
+
+// Search contact by email
 async function findGHLContactByEmail(email) {
   try {
-    const res = await axios.get(`${GHL_API_BASE}/contacts/`, {
-      params: { email },
-      headers: { Authorization: `Bearer ${GHL_API_KEY}` }
+    const res = await axios.get(`${GHL_API_BASE}/contacts/search`, {
+      params: { query: email },
+      headers: { Authorization: `Bearer ${GHL_API_KEY}` },
     });
     return res.data?.contacts?.[0] || null;
   } catch (err) {
@@ -28,46 +35,74 @@ async function findGHLContactByEmail(email) {
   }
 }
 
-// -----------------------
-// Create contact in GHL with tag
-// -----------------------
+// Create new contact
 async function createGHLContact({ name, email, phone }) {
   try {
-    const res = await axios.post(`${GHL_API_BASE}/contacts/`, {
-      name,
-      email,
-      phone,
-      source: "Website Popup",
-      tags: ["REW New Sign Up"] // <--- Tag added here
-    }, {
-      headers: {
-        Authorization: `Bearer ${GHL_API_KEY}`,
-        "Content-Type": "application/json"
+    const res = await axios.post(
+      `${GHL_API_BASE}/contacts/`,
+      {
+        name,
+        email,
+        phone,
+        source: "Website Popup",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${GHL_API_KEY}`,
+          "Content-Type": "application/json",
+        },
       }
-    });
-    return res.data;
+    );
+    return res.data.contact || res.data;
   } catch (err) {
     console.error("Error creating GHL contact:", err.response?.data || err.message);
     throw new Error("Failed to create GHL contact");
   }
 }
 
+// Add a tag to a contact
+async function addTagToContact(contactId, tagId) {
+  try {
+    await axios.put(
+      `${GHL_API_BASE}/contacts/${contactId}/tags/${tagId}`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${GHL_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log(`Tag ${tagId} added to contact ${contactId}`);
+  } catch (err) {
+    console.error("Error adding tag:", err.response?.data || err.message);
+    throw new Error("Failed to add tag");
+  }
+}
+
 // -----------------------
-// API Endpoint
+// API ENDPOINT
 // -----------------------
 app.post("/send-to-crm", async (req, res) => {
   try {
     const { name, email, phone } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
+    // 1. Check if contact exists in GHL
     let ghlContact = await findGHLContactByEmail(email);
+
+    // 2. If not found → create & tag
     if (!ghlContact) {
       ghlContact = await createGHLContact({ name, email, phone });
+
+      if (REW_NEW_SIGNUP_TAG_ID && ghlContact?.id) {
+        await addTagToContact(ghlContact.id, REW_NEW_SIGNUP_TAG_ID);
+      }
     }
 
     res.json({
       message: "Lead processed successfully",
-      ghl: ghlContact
+      ghl: ghlContact,
     });
   } catch (err) {
     console.error(err.message);
@@ -76,7 +111,9 @@ app.post("/send-to-crm", async (req, res) => {
 });
 
 // -----------------------
-// Start Server
+// START SERVER
 // -----------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`Server running on port ${PORT}`)
+);
